@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html >
+<head>
+    <title>QuickNotes App</title>
+    
+    <style>
+        /* 1. GLOBAL RESET: Removes default spacing from all elements */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        /* 2. BODY LAYOUT: Centers the app on the screen */
+        body { background-color: white; height: 100vh; display: flex; justify-content: center; }
+        
+        /* 3. CONTAINER: The main box holding the sidebar and content */
+        .container { display: flex; width: 100%; max-width: 1700px; height: 100vh; background: white; }
+        
+        .title-container{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        /* 4. SIDEBAR: The left panel for inputs */
+        .sidebar { width: 1400px; background-image: url("space.png"); color: white; padding: 20px; display: flex; flex-direction: column; background-size: cover;}
+        .note-form { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
+        
+        /* Styling Inputs */
+        input, textarea { padding: 12px; border: none; border-radius: 5px; font-size: 16px; }
+        textarea { height: 150px; resize: none; } /* resize: none prevents dragging the corner */
+        
+        /* Buttons */
+        button#add-btn { background-color: #27ae60; color: white; padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        button#add-btn:hover { background-color: #219150; cursor:pointer;}
+
+        /* 5. MAIN CONTENT: The right panel for displaying notes */
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; background-image: url("unnamed.jpg"); background-size: cover; } /* overflow-y allows scrolling if notes get too long */
+        .main-content h1 {color: white;}
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .clear-btn { background: transparent; border: 1px solid #e74c3c; color: #e74c3c; padding: 5px 15px; cursor: pointer; }
+        
+        /* 6. GRID LAYOUT: Automatically arranges notes in columns */
+        .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        
+        /* Note Card Styling */
+        .note-card { background: #fff; border: 1px solid #eee; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .note-card h3 { margin-bottom: 10px; color: #2c3e50; }
+        .note-card p { color: #7f8c8d; white-space: pre-wrap; margin-bottom: 15px; } /* white-space: pre-wrap preserves line breaks */
+        .note-actions button { margin-right: 10px; cursor: pointer; border: none; background: none; }
+        .edit-btn { color: #3498db; }
+        .delete-btn { color: #e74c3c; }
+        
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="title-container">
+                <h2>📝 QuickNotes</h2>
+                
+            </div>
+            <div class="note-form">
+                <input type="hidden" id="note-id">
+                
+                <input type="text" id="note-title" placeholder="Note Title">
+                <textarea id="note-desc" placeholder="Write your note here..."></textarea>
+                
+                <button id="add-btn" onclick="saveNote()">Add Note</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header>
+                <h1>My Notes</h1>
+                <button class="clear-btn" onclick="clearAllNotes()">Clear All</button>
+            </header>
+            <div id="notes-container" class="notes-grid"></div>
+        </main>
+    </div>
+
+    <script>
+        // --- 1. SELECTING ELEMENTS ---
+        // We grab the HTML elements by their ID so JavaScript can control them
+        const noteTitleInput = document.getElementById("note-title");
+        const noteDescInput = document.getElementById("note-desc");
+        const noteIdInput = document.getElementById("note-id");
+        const addBtn = document.getElementById("add-btn");
+        const notesContainer = document.getElementById("notes-container");
+        const searchInput = document.getElementById("search-input");
+        // --- 2. INITIALIZATION ---
+        // Run this function immediately when the page loads to show any saved notes
+        displayNotes();
+
+        // Listen for typing
+        searchInput.addEventListener("input", (e) => {
+            const value = e.target.value.toLowerCase(); // Convert input to lowercase
+        
+        // 1. Get the correct list (Active or Trash)
+            const allNotes = isTrashMode ? getTrash() : getNotes();
+
+        // 2. Filter the list
+        // We check if the TITLE or the DESCRIPTION contains the search text
+            const filteredNotes = allNotes.filter(note => 
+                note.title.toLowerCase().includes(value) || 
+                note.desc.toLowerCase().includes(value)
+            );
+
+        // 3. Update the screen with only the matches
+        displayNotes(filteredNotes);
+        
+    });
+        // --- 3. HELPER FUNCTION: GET NOTES ---
+        // LocalStorage only saves Strings (text). We must convert it back to an Array (JSON).
+        // If "notes" doesn't exist yet (first time user), we return an empty array "[]".
+        function getNotes() {
+            return JSON.parse(localStorage.getItem("notes") || "[]");
+        }
+
+        // --- 4. MAIN FUNCTION: SAVE NOTE ---
+        function saveNote() {
+            // .value gets what the user typed. .trim() removes spaces from start/end.
+            const title = noteTitleInput.value.trim();
+            const desc = noteDescInput.value.trim();
+            const id = noteIdInput.value;
+
+            // Validation: Stop if fields are empty
+            // if title or desc is empty, show alert and return i.e. title and desc will be false
+            if (!title || !desc) {
+                alert("Please enter title and description");
+                return;
+            }
+
+            // Get current notes from storage
+            let notes = getNotes();
+
+            if (id) {
+                // --- UPDATE MODE ---
+                // If 'id' is not empty, it means we are editing an existing note.
+                // findIndex looks for the note in the array that matches the ID.
+                // helps us find the id of the array we are updating
+                const noteIndex = notes.findIndex(n => n.id == id);
+                // why > -1 because if not found it returns -1
+                if (noteIndex > -1) {
+                    // Update the properties of the existing note like title, desc and date
+                    notes[noteIndex].title = title;
+                    notes[noteIndex].desc = desc;
+                    notes[noteIndex].date = new Date().toLocaleDateString();
+
+                    notes[noteIndex].time = new Date().toLocaleTimeString();
+                    
+                    // Reset the button text back to "Add Note"
+                    addBtn.innerText = "Add Note";
+                    //without this the next time we add a new note it will think we are still editing the same note
+                    noteIdInput.value = ""; // Clear the ID
+                }
+            } else {
+                // --- CREATE MODE ---
+                // Create a new object with a unique ID (Date.now() uses the current timestamp)
+                // adds the user input to the notes array
+                notes.push({
+                    id: Date.now(),
+                    title: title,
+                    desc: desc,
+                    date: new Date().toLocaleDateString(),
+                    time: new Date().toLocaleTimeString()
+                });
+            }
+
+            // Save the updated array back to LocalStorage (must convert Array -> String)
+            localStorage.setItem("notes", JSON.stringify(notes));
+            
+            // Clear the input boxes for the next note
+            noteTitleInput.value = "";
+            noteDescInput.value = "";
+            
+            // Refresh the screen to show the changes
+            displayNotes();
+        }
+        function changeTheme(){
+            
+        }
+
+        // Change the first line to accept 'notesToDisplay' (default is null)
+        function displayNotes(notesList = null) {
+            // If notesList is passed (Search), use it. Otherwise get all notes.
+            const notes = notesList || getNotes();
+            
+            notesContainer.innerHTML = "";
+            
+            if(notes.length === 0) {
+                if(searchInput.value) {
+                    notesContainer.innerHTML = "<p>No search results found.</p>";
+                } else {
+                    notesContainer.innerHTML = "<p>No notes yet. Create one!</p>";
+                }
+                return;
+            }
+
+            notes.forEach(note => {
+                const noteDiv = document.createElement("div");
+                noteDiv.classList.add("note-card");
+                
+                noteDiv.innerHTML = `
+                    <h3>${note.title}</h3>
+                    <p>${note.desc}</p>
+                    <div class="note-meta">
+                        <small>${note.date} ${note.time}</small>
+                        <div class="note-actions">
+                            <button class="edit-btn" onclick="editNote(${note.id})">Edit</button>
+                            <button class="delete-btn" onclick="deleteNote(${note.id})">Delete</button>
+                        </div>
+                        <small>${countWords(note.desc)}</small>
+                    </div>
+                `;
+                notesContainer.appendChild(noteDiv);
+            });
+        }
+
+        function countWords(str){
+            const words = str.trim().split(/\s+/);
+
+            return words.length;
+        }
+
+
+        // --- 6. FUNCTION: DELETE NOTE ---
+        function deleteNote(id) {
+            if(confirm("Delete this note?")) {
+                let notes = getNotes();
+                // .filter creates a NEW array that includes everything EXCEPT the note with this ID
+                notes = notes.filter(n => n.id != id);
+                
+                // Save the new list
+                localStorage.setItem("notes", JSON.stringify(notes));
+                displayNotes();
+            }
+        }
+
+        // --- 7. FUNCTION: PREPARE EDIT ---
+        // This puts the text back into the sidebar inputs
+        function editNote(id) {
+            const notes = getNotes();
+            // .find gets the specific note object
+            const note = notes.find(n => n.id == id);
+            
+            if(note) {
+                // Fill the input boxes
+                noteTitleInput.value = note.title;
+                noteDescInput.value = note.desc;
+                noteIdInput.value = note.id; // Important: Set the hidden ID so saveNote knows we are editing
+                
+                // Change button text to let user know they are updating
+                addBtn.innerText = "Update Note";
+            }
+        }
+
+        // --- 8. FUNCTION: CLEAR ALL ---
+        function clearAllNotes() {
+            if(confirm("Clear all notes?")) {
+                // Completely wipe the "notes" key from browser storage
+                localStorage.removeItem("notes");
+                displayNotes();
+            }
+        }
+    </script>
+</body>
+</html>
